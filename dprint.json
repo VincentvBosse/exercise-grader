@@ -1,0 +1,6 @@
+{
+  "$schema": "https://plugins.dprint.dev/schemas/latest.json",
+  "incremental": true,
+  "lineWidth": 100,
+  "plugins": ["https://plugins.dprint.dev/dockerfile-0.4.1.wasm"]
+}

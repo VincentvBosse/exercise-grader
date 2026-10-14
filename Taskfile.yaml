@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+vars:
+  PRETTIER_FILES:
+    sh: git ls-files '*.yaml' '*.yml' '*.json' '*.md' | tr '\n' ' '
+  SH_FILES:
+    sh: git ls-files '*.sh' | tr '\n' ' '
+
+tasks:
+  format:
+    desc: Format every supported file type in place.
+    cmds:
+      - ruff check --select I --fix . && ruff format .
+      - npx --yes prettier --write {{.PRETTIER_FILES}}
+      - shfmt -w {{.SH_FILES}}
+      - dprint fmt
+
+  format:check:
+    desc: Verify all files are formatted (CI gate).
+    cmds:
+      - ruff check --select I . && ruff format --check .
+      - npx --yes prettier --check {{.PRETTIER_FILES}}
+      - shfmt -d {{.SH_FILES}}
+      - dprint check
+
+  smoke:
+    desc: Build the image and run the end-to-end smoke tests.
+    cmds:
+      - ./smoke.sh
+
+  default:
+    desc: CI gate (format check + smoke tests).
+    deps: [format:check, smoke]

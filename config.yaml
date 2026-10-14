@@ -1,0 +1,22 @@
+# Grader stage config - deadline grade & report (JOB_KIND=grade).
+#
+# Ordered steps + optional tests. Commands are argv arrays (no shell).
+# ${SUBMISSION} and ${TESTS_DIR} are exported by the framework at runtime.
+
+steps:
+  - name: compile
+    command:
+      - python3
+      - "-c"
+      - >-
+        import sys, io; src = io.open(sys.argv[1], encoding='utf-8').read(); compile(src, sys.argv[1], 'exec');
+        print('syntax ok')
+      - "${SUBMISSION}/solution.py"
+    on_failure: stop
+
+tests:
+  command:
+    - python3
+    - /opt/grader-base/framework/testrunner.py
+    - "${SUBMISSION}"
+    - "${TESTS_DIR}"

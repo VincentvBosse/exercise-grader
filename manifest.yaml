@@ -1,0 +1,22 @@
+# Task structure manifest for the grader image (format 1).
+#
+# Baked into the image at /hopper/manifest.yaml. The build service extracts
+# it (docker create + docker cp) to create missing task headings and tutor
+# boxes in the exercise README; see docs/build.md in the platform monorepo
+# for the contract. Task keys are immutable once a task has been graded.
+format: 1
+
+exercises:
+  count_vowels:
+    tasks:
+      - key: "1.1"
+        title: "Zaehlen der Vokale"
+        points: 4
+      - key: "1.2"
+        title: "Gross- und Kleinschreibung"
+        points: 2
+  is_palindrome:
+    tasks:
+      - key: "2.1"
+        title: "Palindrom-Pruefung"
+        points: 4

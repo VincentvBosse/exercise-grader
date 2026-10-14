@@ -1,0 +1,24 @@
+{
+	"singleQuote": false,
+	"printWidth": 80,
+	"proseWrap": "always",
+	"tabWidth": 4,
+	"useTabs": true,
+	"trailingComma": "all",
+	"bracketSpacing": true,
+	"semi": true,
+
+	"singleAttributePerLine": false,
+	"htmlWhitespaceSensitivity": "ignore",
+
+	"overrides": [
+		{
+			"files": ["*.{yaml,yml}"],
+			"options": { "useTabs": false, "tabWidth": 2, "printWidth": 120 }
+		},
+		{
+			"files": ["*.json"],
+			"options": { "useTabs": false, "tabWidth": 2 }
+		}
+	]
+}

@@ -1,0 +1,7 @@
+# Handled by other formatters - prettier must not touch
+*.py
+*.sh
+Dockerfile*
+
+# Non-formattable
+.env

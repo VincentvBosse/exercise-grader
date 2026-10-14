@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: hopper
+    env:
+      npm_config_cache: /ci-cache/npm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ruff (python)
+        run: |
+          ruff check --select I .
+          ruff format --check .
+
+      - name: prettier (yaml, json, md)
+        run: |
+          npx --yes prettier --check $(
+            git ls-files '*.yaml' '*.yml' '*.json' '*.md' | tr '\n' ' '
+          )
+
+      - name: shfmt (shell)
+        run: |
+          sh_files=$(git ls-files '*.sh' | tr '\n' ' ')
+          if [ -n "$sh_files" ]; then shfmt -d $sh_files; fi
+
+      - name: dprint (Dockerfile)
+        run: dprint check
+
+      - name: bash syntax
+        run: bash -n smoke.sh
+
+  image:
+    runs-on: hopper-docker
+    needs: check
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set lowercase image name
+        run: |
+          echo "IMAGE=codeberg.org/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Login to Forgejo registry
+        run: echo "${{ secrets.REGISTRY_TOKEN }}" | docker login codeberg.org -u ${{ github.actor }} --password-stdin
+
+      - name: Build image
+        run: docker build -t $IMAGE:${{ github.sha }} -t $IMAGE:latest .
+
+      - name: Push image
+        run: |
+          docker push $IMAGE:${{ github.sha }}
+          docker push $IMAGE:latest
