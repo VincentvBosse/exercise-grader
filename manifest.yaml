@@ -20,3 +20,14 @@ exercises:
       - key: "2.1"
         title: "Palindrom-Pruefung"
         points: 4
+  print_trio:
+    tasks:
+      - key: "3.1"
+        title: "Print 1"
+        points: 2
+      - key: "3.2"
+        title: "Print 2"
+        points: 2
+      - key: "3.3"
+        title: "Print 3"
+        points: 2

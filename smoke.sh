@@ -107,6 +107,90 @@ sys.exit(0)
 PY
 }
 
+# validate_manifest <path>
+validate_manifest() {
+	python3 - "$1" <<'PY' || return 1
+import sys
+import yaml
+
+path = sys.argv[1]
+try:
+    with open(path, encoding="utf-8") as f:
+        m = yaml.safe_load(f)
+except Exception as e:
+    print(f"  manifest: NOT valid YAML: {e}", file=sys.stderr)
+    sys.exit(1)
+
+errors = []
+if not isinstance(m, dict):
+    errors.append("top-level value is not an object")
+else:
+    if m.get("format") != 1:
+        errors.append(f"format is {m.get('format')!r}, expected 1")
+    exercises = m.get("exercises")
+    if not isinstance(exercises, dict) or not exercises:
+        errors.append("'exercises' missing, not an object, or empty")
+    else:
+        def check_task(t, where):
+            if not isinstance(t, dict):
+                errors.append(f"{where}: task is not an object")
+                return
+            key = t.get("key")
+            if not isinstance(key, str) or not key:
+                errors.append(f"{where}: key missing or not a non-empty string")
+            title = t.get("title")
+            if not isinstance(title, str) or not title:
+                errors.append(f"{where}: title missing or not a non-empty string")
+            points = t.get("points")
+            if isinstance(points, bool) or not isinstance(points, (int, float)):
+                errors.append(f"{where}: points not numeric ({points!r})")
+            elif points < 0:
+                errors.append(f"{where}: points is negative ({points})")
+            for i, st in enumerate(t.get("subtasks") or []):
+                check_task(st, f"{where}.subtasks[{i}]")
+
+        for name, ex in exercises.items():
+            tasks = ex.get("tasks") if isinstance(ex, dict) else None
+            if not isinstance(tasks, list):
+                errors.append(f"exercise {name}: missing or invalid 'tasks'")
+                continue
+            for i, t in enumerate(tasks):
+                check_task(t, f"exercise {name}.tasks[{i}]")
+if errors:
+    print("  manifest: INVALID: " + "; ".join(errors), file=sys.stderr)
+    sys.exit(1)
+PY
+}
+
+# validate_nested_fixture <path>
+#
+# Best-effort check of the nested subtask path. The real parser and
+# validator are Go code in the build repo, which this repo does not depend
+# on at test time, so this uses the PyYAML stack the base image ships. It
+# proves the fixture is valid YAML with the nested shape and that keys
+# round-trip as opaque strings; it does not run the Go validator.
+validate_nested_fixture() {
+	python3 - "$1" <<'PY' || return 1
+import sys
+import yaml
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as f:
+    m = yaml.safe_load(f)
+tasks = m["exercises"]["count_vowels"]["tasks"]
+parent = next(t for t in tasks if t["key"] == "1.2")
+subs = parent["subtasks"]
+assert [s["key"] for s in subs] == ["1.2a", "1.2b"], subs
+assert subs[0]["title"] == "Kleinschreibung"
+assert subs[0]["points"] == 1
+# Keys are opaque strings: a dump/load round trip keeps them intact.
+rt = yaml.safe_load(yaml.safe_dump(m))
+rt_subs = rt["exercises"]["count_vowels"]["tasks"][0]["subtasks"]
+assert [s["key"] for s in rt_subs] == ["1.2a", "1.2b"], rt_subs
+assert all(isinstance(s["key"], str) for s in rt_subs), rt_subs
+PY
+}
+
 # run_case <label> <expect_exit> <docker args...>
 run_case() {
 	local label="$1"
@@ -263,6 +347,58 @@ assert any("timed out" in e["traceback"] for e in o["tests"]["errors"]), o["test
 print("  contract checks: ok")
 ' "$(cat "$OUT")" || {
 	red "FAIL: timeout contract assertion"
+	FAIL=$((FAIL + 1))
+}
+
+bold "Case 8: baked manifest.yaml shape - format 1, exercises, valid tasks"
+if validate_manifest "$SCRIPT_DIR/manifest.yaml"; then
+	green "PASS: manifest shape"
+	PASS=$((PASS + 1))
+else
+	red "FAIL: manifest shape"
+	FAIL=$((FAIL + 1))
+fi
+
+bold "Case 9: nested subtasks fixture parses and keys round-trip"
+mkdir -p "$TMPDIR/manifest"
+cat >"$TMPDIR/manifest/nested.yaml" <<'YAML'
+format: 1
+exercises:
+  count_vowels:
+    tasks:
+      - key: "1.2"
+        title: "Gross- und Kleinschreibung"
+        points: 2
+        subtasks:
+          - key: "1.2a"
+            title: "Kleinschreibung"
+            points: 1
+          - key: "1.2b"
+            title: "Grossschreibung"
+            points: 1
+YAML
+if validate_nested_fixture "$TMPDIR/manifest/nested.yaml"; then
+	green "PASS: nested subtasks fixture"
+	PASS=$((PASS + 1))
+else
+	red "FAIL: nested subtasks fixture"
+	FAIL=$((FAIL + 1))
+fi
+
+bold "Case 10: print_trio (multi-file submission, no solution.py, baked workspace) - expect exit 0, success"
+run_case "print_trio correct" 0 \
+	-e COURSE=2026WS-eidp -e STUDENT=dave -e EXERCISE=print_trio -e JOB_KIND=grade
+python3 -c '
+import json,sys
+o=json.loads(sys.argv[1])
+assert o["failure"] is False
+assert o["steps"][0]["failure"] is False
+assert o["tests"]["run"]==4, o["tests"]["run"]
+assert len(o["tests"]["passed"])==4
+assert o["tests"]["failure"] is False
+print("  contract checks: ok")
+' "$(cat "$OUT")" || {
+	red "FAIL: print_trio contract assertion"
 	FAIL=$((FAIL + 1))
 }
 

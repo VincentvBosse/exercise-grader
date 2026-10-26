@@ -1,17 +1,31 @@
 # Grader stage config - deadline grade & report (JOB_KIND=grade).
 #
-# Ordered steps + optional tests. Commands are argv arrays (no shell).
-# ${SUBMISSION} and ${TESTS_DIR} are exported by the framework at runtime.
+# The compile step syntax-checks every .py file in the submission (any
+# filenames; solution.py is not special). Ordered steps + optional tests.
+# Commands are argv arrays (no shell). ${SUBMISSION} and ${TESTS_DIR} are
+# exported by the framework at runtime.
 
 steps:
   - name: compile
     command:
       - python3
       - "-c"
-      - >-
-        import sys, io; src = io.open(sys.argv[1], encoding='utf-8').read(); compile(src, sys.argv[1], 'exec');
-        print('syntax ok')
-      - "${SUBMISSION}/solution.py"
+      - |
+        import os, sys
+        d = sys.argv[1]
+        ok = True
+        for py in sorted(os.listdir(d)):
+            if not py.endswith(".py"):
+                continue
+            p = os.path.join(d, py)
+            try:
+                with open(p, encoding="utf-8") as f:
+                    compile(f.read(), p, "exec")
+            except Exception as e:
+                print(e)
+                ok = False
+        sys.exit(0 if ok else 1)
+      - "${SUBMISSION}"
     on_failure: stop
 
 tests:

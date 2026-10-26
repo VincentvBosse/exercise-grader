@@ -40,9 +40,15 @@ grader-example/
   tasks/
     count_vowels/tests/test_count_vowels.py
     is_palindrome/tests/test_is_palindrome.py
+    print_trio/tests/test_print1.py
+    print_trio/tests/test_print2.py
+    print_trio/tests/test_print3.py
   workspace/                 minimal example submissions (baked into image)
     count_vowels/solution.py
     is_palindrome/solution.py
+    print_trio/print1.py      (print_trio has no solution.py - any
+    print_trio/print2.py       filenames work; the tests import the
+    print_trio/print3.py       print1/print2/print3 modules directly)
   smoke.sh                   build + end-to-end smoke tests
   README.md
 ```
@@ -57,12 +63,14 @@ here - they live in `grader-base/`.
    `WORKSPACE`, default `/workspace`).
 2. Resolves the submission at `$WORKSPACE/$EXERCISE`.
 3. Executes the `config.yaml` steps in order:
-    - **Compile step** - syntax-checks `solution.py` in memory (no `.pyc` side
-      effects, so a read-only submission directory is fine). On failure,
-      `on_failure: stop` halts and omits tests.
+    - **Compile step** - syntax-checks **every** `.py` file in the submission
+      directory in memory (no `.pyc` side effects, so a read-only submission
+      directory is fine). On failure, `on_failure: stop` halts and omits tests.
     - **Test step** - runs the bundled tests for that exercise against the
-      student's `solution` module using the shared dependency-free test runner.
-      The runner's JSON output becomes the `tests` member.
+      student's submission using the shared dependency-free test runner. Every
+      `.py` file in the submission is imported as a module named by its file
+      stem; `solution.py` is not special. The runner's JSON output becomes the
+      `tests` member.
 4. Emits **exactly one** `GraderResult` JSON object on stdout (the last line).
    All diagnostics go to stderr.
 5. Exits `0` for student/compile/test failures; exits `2` only for
@@ -81,11 +89,11 @@ README (contract: `docs/build.md` in the platform monorepo):
 ```yaml
 format: 1
 exercises:
-  count_vowels:
-    tasks:
-      - key: "1.1"
-        title: "Zaehlen der Vokale"
-        points: 4
+    count_vowels:
+        tasks:
+            - key: "1.1"
+              title: "Zaehlen der Vokale"
+              points: 4
 ```
 
 Tasks may nest `subtasks` beneath a task:
@@ -93,18 +101,18 @@ Tasks may nest `subtasks` beneath a task:
 ```yaml
 format: 1
 exercises:
-  count_vowels:
-    tasks:
-      - key: "1.2"
-        title: "Gross- und Kleinschreibung"
-        points: 2
-        subtasks:
-          - key: "1.2a"
-            title: "Kleinschreibung"
-            points: 1
-          - key: "1.2b"
-            title: "Grossschreibung"
-            points: 1
+    count_vowels:
+        tasks:
+            - key: "1.2"
+              title: "Gross- und Kleinschreibung"
+              points: 2
+              subtasks:
+                  - key: "1.2a"
+                    title: "Kleinschreibung"
+                    points: 1
+                  - key: "1.2b"
+                    title: "Grossschreibung"
+                    points: 1
 ```
 
 Top-level tasks render as `##` headings and subtasks as `###` headings, each
@@ -133,8 +141,8 @@ docker build -t codeberg.org/hopper/grader-base:latest ../grader-base
 
 The image is driven entirely by env vars (no command arguments). The submission
 must be present at `/workspace/<EXERCISE>`. The image bakes in example
-submissions for `count_vowels` and `is_palindrome`, so it is demoable without a
-volume mount; bind-mount a real submission to override.
+submissions for `count_vowels`, `is_palindrome`, and `print_trio`, so it is
+demoable without a volume mount; bind-mount a real submission to override.
 
 ```bash
 # Demo (uses baked-in example workspace):
@@ -162,7 +170,7 @@ Stdout (the only JSON line):
 	"steps": [
 		{
 			"name": "compile",
-			"logs": ["exit code 0", "syntax ok"],
+			"logs": ["exit code 0"],
 			"failure": false
 		}
 	],
@@ -237,17 +245,25 @@ student repo). This image is self-contained and does **not** use them.
 ```
 
 Ensures the base image is available (pull or build from a local `../grader-base`
-checkout), then builds the grader image and runs seven scenarios: correct
-submissions, a broken solution, a syntax error, missing env, unknown exercise,
-and a mounted infinite-loop solution that proves `COMMAND_TIMEOUT` is enforced -
-validating both exit codes and the `GraderResult` shape against the contract.
+checkout), then builds the grader image and runs ten scenarios: correct
+submissions, a broken solution, a syntax error, missing env, unknown exercise, a
+mounted infinite-loop solution that proves `COMMAND_TIMEOUT` is enforced, the
+baked `manifest.yaml` shape, a nested-subtask fixture round-trip, and the
+`print_trio` multi-file submission without `solution.py` - validating both exit
+codes and the `GraderResult` shape against the contract.
 
 ## Adding an exercise
 
-1. Create `tasks/<exercise>/tests/test_<exercise>.py` with `test_*` functions
-   that `from solution import ...`.
-2. Add a `tasks` list for the exercise to `manifest.yaml` (key, title, points).
-3. Provide a student `solution.py` at `$WORKSPACE/<exercise>/solution.py`.
+1. Create one or more `tasks/<exercise>/tests/test_*.py` files with `test_*`
+   functions that import the student's modules by file stem, for example
+   `from print1 import main` or `from solution import ...`.
+2. Add a `tasks` list for the exercise to `manifest.yaml` (each task has `key`,
+   `title`, and `points`; optional `subtasks` nest further tasks, see the task
+   structure manifest section above).
+3. Provide the student's `.py` file(s) at `$WORKSPACE/<exercise>/` - any
+   filenames. Each file is imported as a module named by its stem; `solution.py`
+   is not special (the `count_vowels`/`is_palindrome` examples use it as their
+   single file, `print_trio` uses three files and no `solution.py`).
 4. Run with `EXERCISE=<exercise>`.
 
 ## `builder_image` / `grader_image` usage
