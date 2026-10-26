@@ -81,15 +81,40 @@ README (contract: `docs/build.md` in the platform monorepo):
 ```yaml
 format: 1
 exercises:
-    count_vowels:
-        tasks:
-            - key: "1.1"
-              title: "Zaehlen der Vokale"
-              points: 4
+  count_vowels:
+    tasks:
+      - key: "1.1"
+        title: "Zaehlen der Vokale"
+        points: 4
 ```
 
-Rules: task keys are immutable once a task has been graded, adding tasks is
-allowed, and an exercise without tasks simply has no `tasks` entry.
+Tasks may nest `subtasks` beneath a task:
+
+```yaml
+format: 1
+exercises:
+  count_vowels:
+    tasks:
+      - key: "1.2"
+        title: "Gross- und Kleinschreibung"
+        points: 2
+        subtasks:
+          - key: "1.2a"
+            title: "Kleinschreibung"
+            points: 1
+          - key: "1.2b"
+            title: "Grossschreibung"
+            points: 1
+```
+
+Top-level tasks render as `##` headings and subtasks as `###` headings, each
+with its own per-task tutor box keyed by its `key` (for example
+`<!-- hopper:tutor:task=1.2a:start -->`). The schema parses `subtasks` at any
+depth, but the renderer maintains one level: deeper subtasks are written when
+the parent heading is created and are not looked up again afterwards.
+
+Rules: task and subtask keys are immutable once a task has been graded, adding
+tasks is allowed, and an exercise without tasks simply has no `tasks` entry.
 
 ## Build
 
