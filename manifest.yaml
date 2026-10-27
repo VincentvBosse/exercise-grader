@@ -7,32 +7,34 @@
 format: 1
 
 exercises:
-  count_vowels:
+  exercise-01:
     tasks:
       - key: "1.1"
-        title: "Zaehlen der Vokale"
-        points: 4
+        title: "Setup und Abgaberegeln"
+        points: 0
       - key: "1.2"
-        title: "Gross- und Kleinschreibung"
-        points: 2
-  is_palindrome:
-    tasks:
-      - key: "2.1"
-        title: "Palindrom-Pruefung"
+        title: "Algorithmen"
         points: 4
-  print_trio:
-    tasks:
-      - key: "3.1"
-        title: "Print 1"
-        points: 2
-      - key: "3.2"
-        title: "Print 2"
-        points: 2
-      - key: "3.3"
-        title: "Print 3"
-        points: 2
-  print_toplevel:
-    tasks:
-      - key: "4.1"
-        title: "Print (Top-Level)"
-        points: 2
+      - key: "1.3"
+        title: "Interaktiver Modus"
+        points: 3
+        subtasks:
+          - key: "1.3a"
+            title: "42 und print(42)"
+            points: 1.5
+          - key: "1.3b"
+            title: "print(42 + ((1337 // 2) * 3) + (19 * 42)"
+            points: 1.5
+      - key: "1.4"
+        title: "Print-Rätsel"
+        points: 3
+        subtasks:
+          - key: "1.4a"
+            title: "print1.py"
+            points: 1
+          - key: "1.4b"
+            title: "print2.py"
+            points: 1
+          - key: "1.4c"
+            title: "print3.py"
+            points: 1
