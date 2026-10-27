@@ -402,6 +402,32 @@ print("  contract checks: ok")
 	FAIL=$((FAIL + 1))
 }
 
+bold "Case 11: print_toplevel (bare top-level print, no main guard, baked workspace) - expect exit 0, success"
+run_case "print_toplevel correct" 0 \
+	-e COURSE=2026WS-eidp -e STUDENT=erin -e EXERCISE=print_toplevel -e JOB_KIND=grade
+python3 -c '
+import json,sys
+o=json.loads(sys.argv[1])
+assert o["failure"] is False
+assert o["steps"][0]["failure"] is False
+assert o["tests"]["run"]==2, o["tests"]["run"]
+assert len(o["tests"]["passed"])==2
+assert o["tests"]["failure"] is False
+print("  contract checks: ok")
+' "$(cat "$OUT")" || {
+	red "FAIL: print_toplevel contract assertion"
+	FAIL=$((FAIL + 1))
+}
+# The import-time print must be redirected to stderr; stdout stays pure
+# JSON (validated by run_case above).
+if grep -q "Hello, World!" "$ERR"; then
+	green "PASS: import-time print redirected to stderr"
+	PASS=$((PASS + 1))
+else
+	red "FAIL: import-time print missing from stderr"
+	FAIL=$((FAIL + 1))
+fi
+
 bold "Summary"
 echo "  passed: $PASS"
 echo "  failed: $FAIL"

@@ -31,3 +31,8 @@ exercises:
       - key: "3.3"
         title: "Print 3"
         points: 2
+  print_toplevel:
+    tasks:
+      - key: "4.1"
+        title: "Print (Top-Level)"
+        points: 2

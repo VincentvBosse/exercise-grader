@@ -43,12 +43,16 @@ grader-example/
     print_trio/tests/test_print1.py
     print_trio/tests/test_print2.py
     print_trio/tests/test_print3.py
+    print_toplevel/tests/test_print1.py
   workspace/                 minimal example submissions (baked into image)
     count_vowels/solution.py
     is_palindrome/solution.py
     print_trio/print1.py      (print_trio has no solution.py - any
     print_trio/print2.py       filenames work; the tests import the
     print_trio/print3.py       print1/print2/print3 modules directly)
+    print_toplevel/print1.py   (a bare top-level print, no main() and no
+                               __name__ guard; the test runs the file via
+                               runpy and reads the source via $SUBMISSION)
   smoke.sh                   build + end-to-end smoke tests
   README.md
 ```
@@ -69,8 +73,10 @@ here - they live in `grader-base/`.
     - **Test step** - runs the bundled tests for that exercise against the
       student's submission using the shared dependency-free test runner. Every
       `.py` file in the submission is imported as a module named by its file
-      stem; `solution.py` is not special. The runner's JSON output becomes the
-      `tests` member.
+      stem; `solution.py` is not special. Importing executes top-level code, so
+      any stray output (top-level prints in the submission, prints in test code)
+      is redirected to stderr; stdout carries only the JSON result. The runner's
+      JSON output becomes the `tests` member.
 4. Emits **exactly one** `GraderResult` JSON object on stdout (the last line).
    All diagnostics go to stderr.
 5. Exits `0` for student/compile/test failures; exits `2` only for
@@ -141,8 +147,9 @@ docker build -t codeberg.org/hopper/grader-base:latest ../grader-base
 
 The image is driven entirely by env vars (no command arguments). The submission
 must be present at `/workspace/<EXERCISE>`. The image bakes in example
-submissions for `count_vowels`, `is_palindrome`, and `print_trio`, so it is
-demoable without a volume mount; bind-mount a real submission to override.
+submissions for `count_vowels`, `is_palindrome`, `print_trio`, and
+`print_toplevel`, so it is demoable without a volume mount; bind-mount a real
+submission to override.
 
 ```bash
 # Demo (uses baked-in example workspace):
@@ -245,18 +252,26 @@ student repo). This image is self-contained and does **not** use them.
 ```
 
 Ensures the base image is available (pull or build from a local `../grader-base`
-checkout), then builds the grader image and runs ten scenarios: correct
+checkout), then builds the grader image and runs eleven scenarios: correct
 submissions, a broken solution, a syntax error, missing env, unknown exercise, a
 mounted infinite-loop solution that proves `COMMAND_TIMEOUT` is enforced, the
-baked `manifest.yaml` shape, a nested-subtask fixture round-trip, and the
-`print_trio` multi-file submission without `solution.py` - validating both exit
-codes and the `GraderResult` shape against the contract.
+baked `manifest.yaml` shape, a nested-subtask fixture round-trip, the
+`print_trio` multi-file submission without `solution.py`, and the
+`print_toplevel` submission with a bare top-level print (import-time output is
+redirected to stderr, stdout stays pure JSON) - validating both exit codes and
+the `GraderResult` shape against the contract.
 
 ## Adding an exercise
 
 1. Create one or more `tasks/<exercise>/tests/test_*.py` files with `test_*`
    functions that import the student's modules by file stem, for example
-   `from print1 import main` or `from solution import ...`.
+   `from print1 import main` or `from solution import ...`. To read a submission
+   file's source (for `ast`/`inspect` checks) or to run it, build the path from
+   `os.environ["SUBMISSION"]` - the process working directory is not the
+   submission directory. To assert on a program's printed output, capture it
+   explicitly: `contextlib.redirect_stdout` around `runpy.run_path(<file>)` or a
+   `main()` call, or
+   `subprocess.run([sys.executable, <file>], capture_output=True, text=True)`.
 2. Add a `tasks` list for the exercise to `manifest.yaml` (each task has `key`,
    `title`, and `points`; optional `subtasks` nest further tasks, see the task
    structure manifest section above).
