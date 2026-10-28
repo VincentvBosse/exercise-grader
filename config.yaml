@@ -1,11 +1,20 @@
 # Grader stage config - deadline grade & report (JOB_KIND=grade).
 #
-# The compile step syntax-checks every .py file in the submission (any
-# filenames; solution.py is not special). Ordered steps + optional tests.
-# Commands are argv arrays (no shell). ${SUBMISSION} and ${TESTS_DIR} are
-# exported by the framework at runtime.
+# Lint (flake8) and compile check every .py file in the submission (any
+# filenames; solution.py is not special). Lint uses on_failure: continue
+# so every check runs and is reported; a lint or compile failure marks the
+# grade as failed (automatic zero, see docs/build.md). Ordered steps +
+# optional tests. Commands are argv arrays (no shell). ${SUBMISSION} and
+# ${TESTS_DIR} are exported by the framework at runtime.
 
 steps:
+  - name: lint
+    command:
+      - flake8
+      - "--ignore=E501,E704,E731,W5,C901"
+      - "${SUBMISSION}"
+    on_failure: continue
+
   - name: compile
     command:
       - python3

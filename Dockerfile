@@ -10,8 +10,12 @@
 # mount a real submission to override).
 FROM codeberg.org/hopper/grader-base:latest
 
-# Stage config and bundled task tests (owned by root, readable by all).
+# Grader-specific tool: flake8 for the lint step. The base image ships
+# only PyYAML, so install flake8 here as root before switching back.
 USER root
+RUN pip install --no-cache-dir flake8
+
+# Stage config and bundled task tests (owned by root, readable by all).
 COPY config.yaml /opt/grader-base/config.yaml
 COPY tasks/ /opt/grader-base/tasks/
 
