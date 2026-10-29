@@ -273,7 +273,7 @@ print("  contract checks: ok")
 	FAIL=$((FAIL + 1))
 }
 
-bold "Case 3: count_vowels with a broken solution (mounted) - expect exit 0, failure"
+bold "Case 3: count_vowels with a broken solution (mounted) - expect exit 0, tests failure (top-level failure stays false)"
 mkdir -p "$TMPDIR/broken/count_vowels"
 cat >"$TMPDIR/broken/count_vowels/solution.py" <<'PY'
 def count_vowels(s):
@@ -285,7 +285,7 @@ run_case "count_vowels broken" 0 \
 python3 -c '
 import json,sys
 o=json.loads(sys.argv[1])
-assert o["failure"] is True, "expected overall failure=true"
+assert o["failure"] is False, "test failures must not set top-level failure"
 assert o["steps"][0]["failure"] is False, "compile should pass"
 assert o["tests"]["failure"] is True
 assert o["tests"]["run"]==6
@@ -338,7 +338,7 @@ run_case "timeout_loop" 0 \
 python3 -c '
 import json,sys
 o=json.loads(sys.argv[1])
-assert o["failure"] is True, o
+assert o["failure"] is False, "test timeout must not set top-level failure"
 assert "tests" in o, "tests must be present (compile passed, test timed out)"
 assert o["tests"]["failure"] is True
 assert o["tests"]["run"]==0, o["tests"]["run"]
