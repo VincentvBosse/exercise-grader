@@ -36,3 +36,8 @@ exercises:
       - key: "4.1"
         title: "Print (Top-Level)"
         points: 2
+  stdin_read:
+    tasks:
+      - key: "5.1"
+        title: "Leiterlaenge (stdin)"
+        points: 2

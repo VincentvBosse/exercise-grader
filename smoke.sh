@@ -97,6 +97,17 @@ else:
                and all(k in t and isinstance(t[k], list) for k in ("failures","errors")):
                 if t["failure"] != (bool(t["failures"]) or bool(t["errors"])):
                     errors.append("tests.failure disagrees with failures/errors emptiness")
+            if "notes" in t:
+                if not isinstance(t["notes"], list):
+                    errors.append("tests.notes not list")
+                elif not t["notes"]:
+                    errors.append("tests.notes present but empty (must be absent when empty)")
+                else:
+                    for j, n in enumerate(t["notes"]):
+                        if not isinstance(n, dict) or "method" not in n or "message" not in n:
+                            errors.append(f"tests.notes[{j}] not {{method,message}} object")
+                        elif not isinstance(n["method"], str) or not isinstance(n["message"], str):
+                            errors.append(f"tests.notes[{j}] method/message not strings")
     for forbidden in ("points", "score", "grade"):
         if forbidden in obj:
             errors.append(f"forbidden field '{forbidden}' present")
@@ -224,15 +235,15 @@ run_case() {
 }
 
 bold "Ensuring base image $BASE_IMAGE ..."
-if ! docker image inspect "$BASE_IMAGE" >/dev/null 2>&1; then
+# Build from the local ../grader-base checkout when it exists so a stale
+# local or registry copy of the base image is never reused; fall back to
+# the existing image or a pull otherwise.
+if [ -d "$BASE_DIR" ]; then
+	docker build -t "$BASE_IMAGE" "$BASE_DIR"
+elif ! docker image inspect "$BASE_IMAGE" >/dev/null 2>&1; then
 	docker pull "$BASE_IMAGE" || {
-		if [ -d "$BASE_DIR" ]; then
-			red "pull failed, building $BASE_IMAGE from $BASE_DIR"
-			docker build -t "$BASE_IMAGE" "$BASE_DIR"
-		else
-			red "pull failed and $BASE_DIR does not exist"
-			exit 1
-		fi
+		red "pull failed and no local $BASE_DIR to build from"
+		exit 1
 	}
 fi
 
@@ -246,7 +257,8 @@ python3 -c '
 import json,sys
 o=json.loads(sys.argv[1])
 assert o["failure"] is False, "expected overall failure=false"
-assert o["steps"][0]["name"]=="compile" and o["steps"][0]["failure"] is False
+assert o["steps"][0]["name"]=="lint" and o["steps"][0]["failure"] is False
+assert next(s for s in o["steps"] if s["name"]=="compile")["failure"] is False
 assert o["tests"]["run"]==6, o["tests"]["run"]
 assert len(o["tests"]["passed"])==6, o["tests"]["passed"]
 assert o["tests"]["failures"]==[] and o["tests"]["errors"]==[]
@@ -286,7 +298,7 @@ python3 -c '
 import json,sys
 o=json.loads(sys.argv[1])
 assert o["failure"] is False, "test failures must not set top-level failure"
-assert o["steps"][0]["failure"] is False, "compile should pass"
+assert next(s for s in o["steps"] if s["name"]=="compile")["failure"] is False, "compile should pass"
 assert o["tests"]["failure"] is True
 assert o["tests"]["run"]==6
 assert len(o["tests"]["failures"])>=1, o["tests"]["failures"]
@@ -309,7 +321,8 @@ python3 -c '
 import json,sys
 o=json.loads(sys.argv[1])
 assert o["failure"] is True
-assert o["steps"][0]["name"]=="compile" and o["steps"][0]["failure"] is True
+assert o["steps"][0]["name"]=="lint", "lint runs first and continues (may fail on a syntax error)"
+assert next(s for s in o["steps"] if s["name"]=="compile")["failure"] is True
 assert "tests" not in o, "tests must be omitted when compile fails"
 print("  contract checks: ok")
 ' "$(cat "$OUT")" || {
@@ -427,6 +440,28 @@ else
 	red "FAIL: import-time print missing from stderr"
 	FAIL=$((FAIL + 1))
 fi
+
+bold "Case 12: stdin_read (top-level input() submission, baked workspace) - expect exit 0, success"
+run_case "stdin_read correct" 0 \
+	-e COURSE=2026WS-eidp -e STUDENT=frank -e EXERCISE=stdin_read -e JOB_KIND=grade
+python3 -c '
+import json,sys
+o=json.loads(sys.argv[1])
+assert o["failure"] is False
+assert o["steps"][0]["failure"] is False
+assert o["tests"]["run"]==2, o["tests"]["run"]
+assert len(o["tests"]["passed"])==2
+assert o["tests"]["failure"] is False
+notes=o["tests"]["notes"]
+assert len(notes)==1 and notes[0]["method"]=="ladder.<import>", notes
+assert "ladder.py" in notes[0]["message"] and "explicit stdin" in notes[0]["message"], notes
+# The default note is descriptive; the __main__ guidance is strict-mode only.
+assert "__main__" not in notes[0]["message"], notes
+print("  contract checks: ok")
+' "$(cat "$OUT")" || {
+	red "FAIL: stdin_read contract assertion"
+	FAIL=$((FAIL + 1))
+}
 
 bold "Summary"
 echo "  passed: $PASS"

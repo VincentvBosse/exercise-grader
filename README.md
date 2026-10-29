@@ -28,8 +28,8 @@ the platform monorepo.
 ## Relationship to grader-base
 
 This image `FROM codeberg.org/hopper/grader-base:latest`. The base image
-provides the framework (`run.py`, `testrunner.py`, `config.py`), the canonical
-`GraderResult` schema, and PyYAML. This image contains **only**:
+provides the framework (`run.py`, `testrunner.py`, `config.py`, `harness.py`),
+the canonical `GraderResult` schema, and PyYAML. This image contains **only**:
 
 ```
 grader-example/
@@ -44,6 +44,7 @@ grader-example/
     print_trio/tests/test_print2.py
     print_trio/tests/test_print3.py
     print_toplevel/tests/test_print1.py
+    stdin_read/tests/test_ladder.py
   workspace/                 minimal example submissions (baked into image)
     count_vowels/solution.py
     is_palindrome/solution.py
@@ -53,12 +54,17 @@ grader-example/
     print_toplevel/print1.py   (a bare top-level print, no main() and no
                                __name__ guard; the test runs the file via
                                runpy and reads the source via $SUBMISSION)
+    stdin_read/ladder.py       (reads stdin at top level, no main() and no
+                               __name__ guard; the import hits EOF and the
+                               runner records a non-fatal note, while the
+                               test drives the file through the harness
+                               with explicit stdin)
   smoke.sh                   build + end-to-end smoke tests
   README.md
 ```
 
-No `run.py`, `testrunner.py`, or `grader_result.schema.json` is duplicated
-here - they live in `grader-base/`.
+No `run.py`, `testrunner.py`, `harness.py`, or `grader_result.schema.json` is
+duplicated here - they live in `grader-base/`.
 
 ## What it does
 
@@ -67,6 +73,9 @@ here - they live in `grader-base/`.
    `WORKSPACE`, default `/workspace`).
 2. Resolves the submission at `$WORKSPACE/$EXERCISE`.
 3. Executes the `config.yaml` steps in order:
+    - **Lint step** - `flake8` over every file in the submission directory with
+      `on_failure: continue`, so a lint hit is reported without hiding the
+      compile and test results. A lint failure still marks the run as failed.
     - **Compile step** - syntax-checks **every** `.py` file in the submission
       directory in memory (no `.pyc` side effects, so a read-only submission
       directory is fine). On failure, `on_failure: stop` halts and omits tests.
@@ -75,11 +84,14 @@ here - they live in `grader-base/`.
       `.py` file in the submission is imported as a module named by its file
       stem; `solution.py` is not special. Importing executes top-level code, so
       any stray output (top-level prints in the submission, prints in test code)
-      is redirected to stderr; stdout carries only the JSON result. The runner's
-      JSON output becomes the `tests` member.
+      is redirected to stderr; stdout carries only the JSON result. A submission
+      that reads stdin at top level hits EOF on that import and is reported as a
+      non-fatal note in `tests.notes` instead of an `errors` entry, so the tests
+      still run and `tests.failure` stays false (see `grader-base/README.md`).
+      The runner's JSON output becomes the `tests` member.
 4. Emits **exactly one** `GraderResult` JSON object on stdout (the last line).
    All diagnostics go to stderr.
-5. Exits `0` for student/compile/test failures; exits `2` only for
+5. Exits `0` for student/step/test failures; exits `2` only for
    invocation/internal errors (missing env, missing submission dir, no bundled
    tests).
 
@@ -147,8 +159,8 @@ docker build -t codeberg.org/hopper/grader-base:latest ../grader-base
 
 The image is driven entirely by env vars (no command arguments). The submission
 must be present at `/workspace/<EXERCISE>`. The image bakes in example
-submissions for `count_vowels`, `is_palindrome`, `print_trio`, and
-`print_toplevel`, so it is demoable without a volume mount; bind-mount a real
+submissions for `count_vowels`, `is_palindrome`, `print_trio`, `print_toplevel`,
+and `stdin_read`, so it is demoable without a volume mount; bind-mount a real
 submission to override.
 
 ```bash
@@ -176,6 +188,11 @@ Stdout (the only JSON line):
 {
 	"steps": [
 		{
+			"name": "lint",
+			"logs": ["exit code 0"],
+			"failure": false
+		},
+		{
 			"name": "compile",
 			"logs": ["exit code 0"],
 			"failure": false
@@ -199,11 +216,17 @@ Stdout (the only JSON line):
 }
 ```
 
-When the compile step fails, `tests` is omitted:
+When the compile step fails, `tests` is omitted. The lint step ran first and
+also failed (flake8 reports a syntax error as `E999`):
 
 ```json
 {
 	"steps": [
+		{
+			"name": "lint",
+			"logs": ["exit code 1", "... E999 SyntaxError: ..."],
+			"failure": true
+		},
 		{
 			"name": "compile",
 			"logs": ["exit code 1", "... SyntaxError ..."],
@@ -222,14 +245,15 @@ stderr. There are no `points`/`score`/`grade` fields anywhere.
 
 ## Environment variables
 
-| Var               | Required | Default      | Purpose                                         |
-| ----------------- | -------- | ------------ | ----------------------------------------------- |
-| `EXERCISE`        | yes      | -            | Selects `$WORKSPACE/$EXERCISE` + bundled tests. |
-| `COURSE`          | no       | `""`         | Identification / diagnostics only.              |
-| `STUDENT`         | no       | `""`         | Identification / diagnostics only.              |
-| `WORKSPACE`       | no       | `/workspace` | Submission root.                                |
-| `COMMAND_TIMEOUT` | no       | `300`        | Per-step timeout in seconds.                    |
-| `JOB_KIND`        | no       | `""`         | Execution stage; `grade` for this image.        |
+| Var                    | Required | Default      | Purpose                                                                                                                                                                                |
+| ---------------------- | -------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EXERCISE`             | yes      | -            | Selects `$WORKSPACE/$EXERCISE` + bundled tests.                                                                                                                                        |
+| `COURSE`               | no       | `""`         | Identification / diagnostics only.                                                                                                                                                     |
+| `STUDENT`              | no       | `""`         | Identification / diagnostics only.                                                                                                                                                     |
+| `WORKSPACE`            | no       | `/workspace` | Submission root.                                                                                                                                                                       |
+| `COMMAND_TIMEOUT`      | no       | `300`        | Per-step timeout in seconds.                                                                                                                                                           |
+| `JOB_KIND`             | no       | `""`         | Execution stage; `grade` for this image.                                                                                                                                               |
+| `HOPPER_IMPORT_STRICT` | no       | unset        | Opt-in course knob (set it in the image, not by the build service): a top-level `input()` becomes a `tests.errors` entry instead of a `tests.notes` note. See `grader-base/README.md`. |
 
 The build service also passes `GITEA_*` env vars (for images that clone the
 student repo). This image is self-contained and does **not** use them.
@@ -241,7 +265,8 @@ student repo). This image is self-contained and does **not** use them.
 - **No network** assumptions; the image does not clone or call out.
 - **No secrets** are read or required.
 - **Stateless**: no data is persisted between runs.
-- `COMMAND_TIMEOUT` bounds each step (compile and test) via subprocess timeouts.
+- `COMMAND_TIMEOUT` bounds each step (lint, compile and test) via subprocess
+  timeouts.
 - The submission directory only needs to be **readable** by UID 1000; nothing is
   written to it.
 
@@ -251,15 +276,17 @@ student repo). This image is self-contained and does **not** use them.
 ./grader-example/smoke.sh
 ```
 
-Ensures the base image is available (pull or build from a local `../grader-base`
-checkout), then builds the grader image and runs eleven scenarios: correct
-submissions, a broken solution, a syntax error, missing env, unknown exercise, a
-mounted infinite-loop solution that proves `COMMAND_TIMEOUT` is enforced, the
-baked `manifest.yaml` shape, a nested-subtask fixture round-trip, the
-`print_trio` multi-file submission without `solution.py`, and the
-`print_toplevel` submission with a bare top-level print (import-time output is
-redirected to stderr, stdout stays pure JSON) - validating both exit codes and
-the `GraderResult` shape against the contract.
+Ensures the base image is available (building it from the local `../grader-base`
+checkout when that exists, so a stale registry or local copy is never reused),
+then builds the grader image and runs these scenarios: correct submissions, a
+broken solution, a syntax error, missing env, unknown exercise, a mounted
+infinite-loop solution that proves `COMMAND_TIMEOUT` is enforced, the baked
+`manifest.yaml` shape, a nested-subtask fixture round-trip, the `print_trio`
+multi-file submission without `solution.py`, the `print_toplevel` submission
+with a bare top-level print (import-time output is redirected to stderr, stdout
+stays pure JSON), and the `stdin_read` submission that reads stdin at top level
+(non-fatal descriptive import note, tests still run, `failure` stays false) -
+validating both exit codes and the `GraderResult` shape against the contract.
 
 ## Adding an exercise
 
@@ -272,6 +299,36 @@ the `GraderResult` shape against the contract.
    explicitly: `contextlib.redirect_stdout` around `runpy.run_path(<file>)` or a
    `main()` call, or
    `subprocess.run([sys.executable, <file>], capture_output=True, text=True)`.
+   For a submission that reads stdin, use the harness the base image ships:
+   `import _hopper_harness as harness` (the reserved name cannot be shadowed by
+   a submission file) and feed stdin explicitly. Importing such a submission
+   hits EOF and the runner records a `tests.notes` entry instead of a
+   `tests.errors` entry, so the tests still execute. Canonical stdin test
+   snippet (the `stdin_read` example follows this pattern):
+
+    ```python
+    import os
+
+    import _hopper_harness as harness
+
+    SUBMISSION = os.environ["SUBMISSION"]
+
+
+    def test_program():
+        # Subprocess: program gets "3\n4\n" on stdin, output is captured.
+        proc = harness.run_program(os.path.join(SUBMISSION, "ladder.py"), stdin_text="3\n4\n")
+        assert proc.returncode == 0
+        assert proc.lines == ["5.0"]
+
+
+    def test_program_in_process():
+        # In-process: runpy under a patched sys.stdin; second value is the
+        # module globals.
+        out, g = harness.run_module(os.path.join(SUBMISSION, "ladder.py"), stdin_text="6\n8\n")
+        assert out == "10.0\n"
+        assert g["width"] == 6
+    ```
+
 2. Add a `tasks` list for the exercise to `manifest.yaml` (each task has `key`,
    `title`, and `points`; optional `subtasks` nest further tasks, see the task
    structure manifest section above).
@@ -291,9 +348,10 @@ A course configures two image refs in orchestration:
 - `grader_image` - this image (or a course-specific derivative). The build
   service runs it with `JOB_KIND=grade` once the deadline has passed and renders
   the `GraderResult` into the exercise `README.md` (build region with build
-  section + tests section with complete tracebacks, plus the task structure from
-  `/hopper/manifest.yaml`). The report is written **even if the build fails** -
-  a failed build is itself reportable content.
+  section + tests section with complete tracebacks and the non-fatal
+  `tests.notes` messages, plus the task structure from `/hopper/manifest.yaml`).
+  The report is written **even if the build fails** - a failed build is itself
+  reportable content.
 
 Both image refs are opaque strings to the build service; it runs `docker run`
 with the fixed env-var contract and parses the single `GraderResult` JSON from
