@@ -1,15 +1,24 @@
-import contextlib
-import io
-import runpy
 import os
-from unittest.mock import patch
-pfad = os.path.join(os.environ["SUBMISSION"], "ladder.py")
+import _hopper_harness as harness
+SUBMISSION = os.environ["SUBMISSION"]
 
 def test_ladder_example_3_1():
     sim_input = "3\n1\n"
-    ex_out = "Breite der Leiter: \n Anzahl Prossen: \n\n| |\n|+|\n| |\n"
-    with patch('sys.stdin', io.StringIO(sim_input)), patch('sys.stdout', new=io.StringIO()) as fake_stdout:
-        runpy.run_path(pfad)
+    ex_out = ['Breite der Leiter: Anzahl Sprossen: ', '| |', '+-+', '| |', '']
+    proc = harness.run_program(os.path.join(SUBMISSION, "ladder.py"), stdin_text=sim_input)
+    captured = proc.lines
+    assert captured == ex_out, f"output: {captured} did not match expected output: {ex_out}"
 
-    captured = fake_stdout.getvalue()
+def test_ladder_example_9_3():
+    sim_input = "9\n3\n"
+    ex_out = ['Breite der Leiter: Anzahl Sprossen: ', '|       |', '+-------+', '|       |', '+-------+', '|       |', '+-------+', '|       |', '']
+    proc = harness.run_program(os.path.join(SUBMISSION, "ladder.py"), stdin_text=sim_input)
+    captured = proc.lines
+    assert captured == ex_out, f"output: {captured} did not match expected output: {ex_out}"
+
+def test_ladder_3_3():
+    sim_input = "3\n3\n"
+    ex_out = ['Breite der Leiter: Anzahl Sprossen: ', '| |', '+-+', '| |', '+-+', '| |', '+-+', '| |', '']
+    proc = harness.run_program(os.path.join(SUBMISSION, "ladder.py"), stdin_text=sim_input)
+    captured = proc.lines
     assert captured == ex_out, f"output: {captured} did not match expected output: {ex_out}"
