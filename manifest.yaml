@@ -38,3 +38,17 @@ exercises:
           - key: "1.4c"
             title: "print3.py"
             points: 1
+  exercise-02:
+    tasks:
+      - key: "2.1"
+        title: "Typen"
+        points: 4
+      - key: "2.2"
+        title: "Leiter zeichnen"
+        points: 2
+      - key: "2.3"
+        title: "PQ-Formel"
+        points: 2
+      - key: "2.4"
+        title: "Ausdrücke optimieren"
+        points: 2
